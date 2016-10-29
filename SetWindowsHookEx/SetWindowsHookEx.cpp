@@ -1,24 +1,28 @@
-// CreateRemoteThread.cpp : 定义控制台应用程序的入口点。
+// SetWindowsHookEx.cpp : 定义控制台应用程序的入口点。
 //
 
 #include "stdafx.h"
 #include <Windows.h>
 #include <iostream>
+#include <vector>
 #include <TlHelp32.h>
 
 using namespace std;
 
 
-BOOL GrantPriviledge(WCHAR* PriviledgeName);
+BOOL GrantPriviledge(IN PWCHAR PriviledgeName);
 BOOL GetProcessIdByProcessImageName(IN WCHAR* wzProcessImageName, OUT UINT32* TargetProcessId);
-BOOL InjectDll(UINT32 ProcessId);
+BOOL GetThreadIdByProcessId(UINT32 ProcessId, vector<UINT32>& ThreadIdVector);
+BOOL Inject(IN UINT32 ThreadId, OUT HHOOK& HookHandle);
+
+
 
 CHAR	DllFullPath[MAX_PATH] = { 0 };
 
 
+
 int main()
 {
-	printf("This Injection used CreateRemoteThread\r\n");
 	// 首先提权一波
 	if (GrantPriviledge(SE_DEBUG_NAME) == FALSE)
 	{
@@ -31,90 +35,98 @@ int main()
 	GetCurrentDirectoryA(MAX_PATH, DllFullPath);
 
 #ifdef _WIN64
-	GetProcessIdByProcessImageName(L"Taskmgr.exe", &ProcessId);
-	strcat_s(DllFullPath, "\\x64NormalDll.dll");
+	//	GetProcessIdByProcessImageName(L"Taskmgr.exe", &ProcessId);
+	//	GetProcessIdByProcessImageName(L"calculator.exe", &ProcessId);
+	GetProcessIdByProcessImageName(L"explorer.exe", &ProcessId);
+	strcat_s(DllFullPath, "\\x64WindowHookDll.dll");
 #else
 	GetProcessIdByProcessImageName(L"notepad++.exe", &ProcessId);
-	strcat_s(DllFullPath, "\\x86NormalDll.dll");
+	strcat_s(DllFullPath, "\\x86WindowHookDll.dll");
 #endif
 
-	if (ProcessId == 0)
+
+
+	// 然后通过进程id枚举到所有线程id
+	vector<UINT32> ThreadIdVector;
+	GetThreadIdByProcessId(ProcessId, ThreadIdVector);
+
+	HHOOK HookHandle = NULL;
+
+	for (UINT32 ThreadId : ThreadIdVector)
 	{
-		printf("Can't Find Target Process\r\n");
-		return 0;
+		Inject(ThreadId, HookHandle);
+		break;
 	}
 
-	printf("DllFullPath is :%s\r\n", DllFullPath);
-	printf("Target ProcessId is :%d\r\n", ProcessId);
-
-	BOOL bOk = InjectDll(ProcessId);
-	if (bOk == FALSE)
-	{
-		printf("Inject Error\r\n");
-		return 0;
-	}
-
-	printf("Inject Success\r\nInput Any Key To Exit\r\n");
+	printf("Input Any Key To UnHook\r\n");
 	getchar();
 	getchar();
 
-    return 0;
+	UnhookWindowsHookEx(HookHandle);
+
+	return 0;
 }
 
 /************************************************************************
-*  Name : InjectDll
-*  Param: ProcessId		进程Id
-*  Ret  : BOOLEAN
-*  使用CreateRemoteThread创建远程线程实现注入
+*  Name : Inject
+*  Param: ThreadId			线程Id			（IN）
+*  Param: HookHandle		消息钩子句柄	（OUT）
+*  Ret  : BOOL
+*  给目标线程的指定消息上下钩，走进Dll导出函数
 ************************************************************************/
 
-BOOL InjectDll(UINT32 ProcessId)
+BOOL Inject(IN UINT32 ThreadId, OUT HHOOK& HookHandle)
 {
-	HANDLE ProcessHandle = NULL;
+	HMODULE	DllModule = LoadLibraryA(DllFullPath);
+	FARPROC FunctionAddress = GetProcAddress(DllModule, "Sub_1");
 
-	ProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, ProcessId);
-
-	// 在对方进程空间申请内存,存储Dll完整路径
-	UINT32	DllFullPathLength = (strlen(DllFullPath) + 1);
-	PVOID 	DllFullPathBufferData = VirtualAllocEx(ProcessHandle, NULL, DllFullPathLength, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	if (DllFullPathBufferData == NULL)
+	HookHandle = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)FunctionAddress, DllModule, ThreadId);
+	if (HookHandle == NULL)
 	{
-		CloseHandle(ProcessHandle);
 		return FALSE;
 	}
+	return TRUE;
+}
 
-	// 将DllFullPath写进刚刚申请的内存中
-	SIZE_T	ReturnLength;
-	BOOL bOk = WriteProcessMemory(ProcessHandle, DllFullPathBufferData, DllFullPath, strlen(DllFullPath) + 1, &ReturnLength);
+/************************************************************************
+*  Name : GetProcessIdByProcessImageName
+*  Param: ProcessId				进程Id		（IN）
+*  Param: ThreadIdVector		线程Id模板	（OUT）
+*  Ret  : BOOL
+*  枚举制定进程Id的所有线程，压入模板中，返回线程模板集合（TlHelp32）
+************************************************************************/
 
-	LPTHREAD_START_ROUTINE	LoadLibraryAddress = NULL;
-	HMODULE					Kernel32Module = GetModuleHandle(L"Kernel32");
+BOOL GetThreadIdByProcessId(UINT32 ProcessId, vector<UINT32>& ThreadIdVector)
+{
+	HANDLE			ThreadSnapshotHandle = NULL;
+	THREADENTRY32	ThreadEntry32 = { 0 };
 
-	LoadLibraryAddress = (LPTHREAD_START_ROUTINE)GetProcAddress(Kernel32Module, "LoadLibraryA");
+	ThreadEntry32.dwSize = sizeof(THREADENTRY32);
 
-
-	HANDLE ThreadHandle = CreateRemoteThread(ProcessHandle, NULL, 0, LoadLibraryAddress, DllFullPathBufferData, 0, NULL);		// CreateRemoteThread 函数
-	if (ThreadHandle == NULL)
-	{
-		CloseHandle(ProcessHandle);
-		return FALSE;
-	}
-
-	if (WaitForSingleObject(ThreadHandle, INFINITE) == WAIT_FAILED)
+	ThreadSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (ThreadSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
 		return FALSE;
 	}
 
-	CloseHandle(ProcessHandle);
-	CloseHandle(ThreadHandle);
+	Thread32First(ThreadSnapshotHandle, &ThreadEntry32);
+	do
+	{
+		if (ThreadEntry32.th32OwnerProcessID == ProcessId)
+		{
+			ThreadIdVector.emplace_back(ThreadEntry32.th32ThreadID);		// 把该进程的所有线程id压入模板
+		}
+	} while (Thread32Next(ThreadSnapshotHandle, &ThreadEntry32));
 
+	CloseHandle(ThreadSnapshotHandle);
+	ThreadSnapshotHandle = NULL;
 	return TRUE;
 }
 
 /************************************************************************
 *  Name : GetProcessIdByProcessImageName
 *  Param: wzProcessImageName		进程映像名称	（IN）
-*  Param: TargetProcessId			进程Id			（OUT） 
+*  Param: TargetProcessId			进程Id			（OUT）
 *  Ret  : BOOLEAN
 *  使用ToolHelp系列函数通过进程映像名称获得进程Id
 ************************************************************************/
@@ -161,7 +173,7 @@ BOOL GetProcessIdByProcessImageName(IN WCHAR* wzProcessImageName, OUT UINT32* Ta
 *  提升自己想要的权限
 ************************************************************************/
 
-BOOL GrantPriviledge(WCHAR* PriviledgeName)
+BOOL GrantPriviledge(IN PWCHAR PriviledgeName)
 {
 	TOKEN_PRIVILEGES TokenPrivileges, OldPrivileges;
 	DWORD			 dwReturnLength = sizeof(OldPrivileges);

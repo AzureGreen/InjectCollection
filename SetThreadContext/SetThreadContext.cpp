@@ -134,9 +134,9 @@ int main()
 
 	GetCurrentDirectoryW(MAX_PATH, DllFullPath);
 #ifdef _WIN64
-	wcscat_s(DllFullPath, L"\\x64Dll.dll");
+	wcscat_s(DllFullPath, L"\\x64NormalDll.dll");
 #else
-	wcscat_s(DllFullPath, L"\\x86Dll.dll");
+	wcscat_s(DllFullPath, L"\\x86NormalDll.dll");
 #endif
 
 

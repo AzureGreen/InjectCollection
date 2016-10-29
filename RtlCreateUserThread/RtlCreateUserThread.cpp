@@ -49,10 +49,10 @@ int main()
 
 #ifdef _WIN64
 	GetProcessIdByProcessImageName(L"Taskmgr.exe", &ProcessId);
-	strcat_s(DllFullPath, "\\x64Dll.dll");
+	strcat_s(DllFullPath, "\\x64NormalDll.dll");
 #else
 	GetProcessIdByProcessImageName(L"notepad++.exe", &ProcessId);
-	strcat_s(DllFullPath, "\\x86Dll.dll");
+	strcat_s(DllFullPath, "\\x86NormalDll.dll");
 #endif
 
 	if (ProcessId == 0)
@@ -165,6 +165,11 @@ BOOL GetProcessIdByProcessImageName(IN WCHAR* wzProcessImageName, OUT UINT32* Ta
 
 	CloseHandle(ProcessSnapshotHandle);
 	ProcessSnapshotHandle = NULL;
+	
+	if (*TargetProcessId == 0)
+	{
+		return FALSE;
+	}
 	return TRUE;
 }
 

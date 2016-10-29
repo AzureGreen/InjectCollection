@@ -7,7 +7,7 @@ A collection of injection via vc++ in ring3.
 
 2.By the way of suspending one thread of our target process, and then change thread context of eip or rip to our shellcode, last resume thread. so target process will stop to execute our shellcode, our aim will also be achieved!
         
-        some functions are needed, such as SuspendThread, GetThreadContext, SetThreadContext, ResumeThread
+        some functions are needed, such as SuspendThread, GetThreadContext, SetThreadContext, ResumeThread
 
 3.By the way of queueing apc in the thread apc queue, for this method request the thread should be alertable, so I queue this apc in all thread of our target process by force, but it seems to be not steady.
 

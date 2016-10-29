@@ -111,7 +111,6 @@ BOOL InjectDll(UINT32 ProcessId)
 
 	pfnRtlCreateUserThread RtlCreateUserThread = (pfnRtlCreateUserThread)GetProcAddress(GetModuleHandle(L"ntdll.dll"), "RtlCreateUserThread");
 
-
 	HANDLE ThreadHandle = NULL;
 	NTSTATUS Status = RtlCreateUserThread(ProcessHandle, NULL, FALSE, 0, 0, 0, LoadLibraryAddress, DllFullPathBufferData, &ThreadHandle, NULL);
 	if (!NT_SUCCESS(Status) || ThreadHandle == NULL)

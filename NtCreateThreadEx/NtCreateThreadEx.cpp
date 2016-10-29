@@ -20,8 +20,7 @@ typedef NTSTATUS(NTAPI* pfnNtCreateThreadEx)
 	IN SIZE_T StackZeroBits,
 	IN SIZE_T SizeOfStackCommit,
 	IN SIZE_T SizeOfStackReserve,
-	OUT PVOID lpBytesBuffer
-	);
+	OUT PVOID lpBytesBuffer);
 
 BOOL GrantPriviledge(WCHAR* PriviledgeName);
 BOOL GetProcessIdByProcessImageName(IN WCHAR* wzProcessImageName, OUT UINT32* TargetProcessId);

@@ -23,9 +23,6 @@ BOOL InjectShellCodeByApc(IN UINT32 ProcessId, IN UINT32 ThreadId);
 #endif // !_WIN64
 
 
-
-
-
 CHAR	DllFullPath[MAX_PATH] = { 0 };
 
 PVOID	DllFullPathBufferData = NULL;
@@ -87,7 +84,7 @@ int main()
 	// 4.获线程IdVector
 	GetThreadIdByProcessId(ProcessId, ThreadIdVector);
 
-	UINT32 ThreadId = ThreadIdVector[0];
+//	UINT32 ThreadId = ThreadIdVector[0];
 
 
 	// 5.注入
@@ -218,7 +215,7 @@ BOOL InjectDllByApc(IN UINT32 ProcessId, IN UINT32 ThreadId)
 *  Param: ProcessId				进程Id		（IN）
 *  Param: ThreadIdVector		线程Id模板	（OUT）
 *  Ret  : BOOL
-*  枚举制定进程Id的所有线程，压入模板中，返回线程模板集合（TlHelp32）
+*  枚举指定进程Id的所有线程，压入模板中，返回线程模板集合（TlHelp32）
 ************************************************************************/
 
 BOOL GetThreadIdByProcessId(IN UINT32 ProcessId, OUT vector<UINT32>& ThreadIdVector)
@@ -228,21 +225,23 @@ BOOL GetThreadIdByProcessId(IN UINT32 ProcessId, OUT vector<UINT32>& ThreadIdVec
 
 	ThreadEntry32.dwSize = sizeof(THREADENTRY32);
 
-	ThreadSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	ThreadSnapshotHandle = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);		// 给系统所有的线程快照
 	if (ThreadSnapshotHandle == INVALID_HANDLE_VALUE)
 	{
 		return FALSE;
 	}
 
-	Thread32First(ThreadSnapshotHandle, &ThreadEntry32);
-	do
+	if (Thread32First(ThreadSnapshotHandle, &ThreadEntry32))
 	{
-		if (ThreadEntry32.th32OwnerProcessID == ProcessId)
+		do
 		{
-			ThreadIdVector.emplace_back(ThreadEntry32.th32ThreadID);		// 把该进程的所有线程id压入模板
-		}
-	} while (Thread32Next(ThreadSnapshotHandle, &ThreadEntry32));
-
+			if (ThreadEntry32.th32OwnerProcessID == ProcessId)
+			{
+				ThreadIdVector.emplace_back(ThreadEntry32.th32ThreadID);		// 把该进程的所有线程id压入模板
+			}
+		} while (Thread32Next(ThreadSnapshotHandle, &ThreadEntry32));
+	}
+	
 	CloseHandle(ThreadSnapshotHandle);
 	ThreadSnapshotHandle = NULL;
 	return TRUE;
@@ -269,15 +268,17 @@ BOOL GetProcessIdByProcessImageName(IN PWCHAR wzProcessImageName, OUT PUINT32 Pr
 		return FALSE;
 	}
 
-	Process32First(ProcessSnapshotHandle, &ProcessEntry32);		// 找到第一个
-	do
+	if (Process32First(ProcessSnapshotHandle, &ProcessEntry32))		// 找到第一个
 	{
-		if (lstrcmpi(ProcessEntry32.szExeFile, wzProcessImageName) == 0)		// 不区分大小写
+		do
 		{
-			*ProcessId = ProcessEntry32.th32ProcessID;
-			break;
-		}
-	} while (Process32Next(ProcessSnapshotHandle, &ProcessEntry32));
+			if (lstrcmpi(ProcessEntry32.szExeFile, wzProcessImageName) == 0)		// 不区分大小写
+			{
+				*ProcessId = ProcessEntry32.th32ProcessID;
+				break;
+			}
+		} while (Process32Next(ProcessSnapshotHandle, &ProcessEntry32));
+	}
 
 	CloseHandle(ProcessSnapshotHandle);
 	ProcessSnapshotHandle = NULL;

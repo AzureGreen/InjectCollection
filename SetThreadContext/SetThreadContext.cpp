@@ -14,8 +14,7 @@ NTSTATUS(NTAPI * pfnRtlAdjustPrivilege)(
 	UINT32 Privilege,
 	BOOLEAN Enable,
 	BOOLEAN Client,
-	PBOOLEAN WasEnabled
-	);
+	PBOOLEAN WasEnabled);
 
 typedef
 NTSTATUS(NTAPI * pfnZwQuerySystemInformation)(
@@ -59,7 +58,17 @@ ShellCode:
 */
 
 #ifdef _WIN64
-// 测试 64 位 dll被注，但是被注入后崩溃
+// 测试 64 位 dll被注，Bug已修复
+
+/*
+0:019> u 0x000002b5d5f80000
+000002b5`d5f80000 4883ec28        sub     rsp,28h
+000002b5`d5f80004 488d0d20000000  lea     rcx,[000002b5`d5f8002b]
+000002b5`d5f8000b ff1512000000    call    qword ptr [000002b5`d5f80023]
+000002b5`d5f80011 4883c428        add     rsp,28h
+000002b5`d5f80015 ff2500000000    jmp     qword ptr [000002b5`d5f8001b]
+*/
+
 UINT8	ShellCode[0x100] = {
 	0x48,0x83,0xEC,0x28,	// sub rsp ,28h
 
@@ -90,7 +99,20 @@ UINT8	ShellCode[0x100] = {
 //	......
 };
 #else
-// 测试 32 位 只能被注入一次
+// 测试 32 位 配合新写的Dll可重复注入
+
+/*
+0:005> u 0x00ca0000
+00000000`00ca0000 60              pusha
+00000000`00ca0001 9c              pushfq
+00000000`00ca0002 681d00ca00      push    0CA001Dh
+00000000`00ca0007 ff151900ca00    call    qword ptr [00000000`01940026]
+00000000`00ca000d 9d              popfq
+00000000`00ca000e 61              popa
+00000000`00ca000f ff251500ca00    jmp     qword ptr [00000000`0194002a]
+
+*/
+
 UINT8	ShellCode[0x100] = {
 	0x60,					// [+0] pusha
 	0x9c,					// [+1] pushf
@@ -445,7 +467,7 @@ BOOL GetThreadIdByProcessId(IN UINT32 ProcessId, OUT PUINT32 ThreadId)
 
 	spi = (PSYSTEM_PROCESS_INFO)BufferData;
 
-	// 遍历进程
+	// 遍历进程，找到我们的目标进程
 	while (TRUE)
 	{
 		bOk = FALSE;
@@ -468,7 +490,7 @@ BOOL GetThreadIdByProcessId(IN UINT32 ProcessId, OUT PUINT32 ThreadId)
 	{
 		for (INT i = 0; i < spi->NumberOfThreads; i++)
 		{
-			// 执行的不能是当前线程
+			// 返出找到的线程Id
 			*ThreadId = (UINT32)spi->Threads[i].ClientId.UniqueThread;
 			break;
 		}

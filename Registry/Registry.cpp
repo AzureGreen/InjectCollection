@@ -10,7 +10,11 @@ using namespace std;
 int main()
 {
 	LSTATUS Status = 0;
+#ifdef _WIN64
 	WCHAR*	wzSubKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
+#else
+	WCHAR*	wzSubKey = L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
+#endif // _WIN64
 	HKEY	hKey = NULL;
 
 	// 打开注册表
@@ -37,7 +41,7 @@ int main()
 		ValueData,			// 键值
 		&dwReturnLength);
 
-
+	// 准备我们要写入的Dll路径
 	WCHAR	wzDllFullPath[MAX_PATH] = { 0 };
 	GetCurrentDirectoryW(MAX_PATH, wzDllFullPath);
 
@@ -87,7 +91,7 @@ int main()
 	Status = RegQueryValueExW(hKey, wzValueName, NULL, &dwValueType, ValueData, &dwReturnLength);
 	Status = RegSetValueExW(hKey, wzValueName, NULL, dwValueType, (CONST BYTE*)wzDllFullPath, 0);
 
+	RegCloseKey(hKey);
 
 	return 0;
 }
-

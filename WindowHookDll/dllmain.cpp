@@ -17,10 +17,12 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	return TRUE;
 }
 
-extern "C"
-__declspec(dllexport)
-VOID	Sub_1()					// 导出函数
+// 调试发现，这里的调用约定要使用__stdcall，应该跟堆栈有关系
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	MessageBox(0, 0, 0, 0);
+
+	return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
+
 

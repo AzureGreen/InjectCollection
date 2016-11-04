@@ -7,14 +7,40 @@
 
 using namespace std;
 
+typedef enum _eOsBits
+{
+	ob_32,
+	ob_64
+} eOsBits;
+
+eOsBits GetOsBits();
+
 int main()
 {
-	LSTATUS Status = 0;
+	// 判断操作系统位数
+	eOsBits OsBits = GetOsBits();
+
+	WCHAR*	wzSubKey = NULL;
+
+	if (OsBits == ob_64)
+	{
 #ifdef _WIN64
-	WCHAR*	wzSubKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
+		wzSubKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
 #else
-	WCHAR*	wzSubKey = L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
+		wzSubKey = L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
 #endif // _WIN64
+	}
+	else if (OsBits == ob_32)
+	{
+		wzSubKey = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows";
+	}
+	else
+	{
+		return 0;
+	}
+
+	LSTATUS Status = 0;
+
 	HKEY	hKey = NULL;
 
 	// 打开注册表
@@ -94,4 +120,25 @@ int main()
 	RegCloseKey(hKey);
 
 	return 0;
+}
+
+
+/************************************************************************
+*  Name : GetOsBits
+*  Param: void
+*  Ret  : eOsBits
+*  获得当前操作系统位数
+************************************************************************/
+
+eOsBits GetOsBits()
+{
+	SYSTEM_INFO si;
+	GetNativeSystemInfo(&si);
+
+	if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64 ||
+		si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64)
+	{
+		return ob_64;
+	}
+	return ob_32;
 }
